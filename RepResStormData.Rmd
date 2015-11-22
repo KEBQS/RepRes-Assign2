@@ -54,14 +54,14 @@ Data consists of 902,207 rows and 37 columns collected during 62 years
 
 ```{r, echo=TRUE}
 dim(Storm_data)
-summary(Storm_data)
+#summary(Storm_data)
 str(Storm_data)
 head(Storm_data)
 #Subsetting the data to show only those columns we wneed to work on
 onlyColumns <- c("BGN_DATE","COUNTY","COUNTYNAME","STATE","EVTYPE","LENGTH","WIDTH","FATALITIES","INJURIES","PROPDMG", "PROPDMGEXP","CROPDMG","CROPDMGEXP")
 StormData <- Storm_data[, onlyColumns]
 StormData$YEAR <- as.numeric(format(as.Date(Storm_data$BGN_DATE, format = "%m/%d/%Y %H:%M:%S"), "%Y"))
-unique(StormData$YEAR)
+#unique(StormData$YEAR)
 TotStormsPerYear <- split(as.numeric(Storm_data$fatalities), Storm_data$year)
 #missingvalues<-sum(is.na(Storm_data))
 ```
@@ -126,7 +126,7 @@ There is 985 types of events.
 
 ```{r}
 # aggregate the data by event
-unique(StormData$EVTYPE)
+#unique(StormData$EVTYPE)
 grpfatal <- aggregate(FATALITIES ~ EVTYPE, data = StormData, FUN = sum)
 grpinjury <- aggregate(INJURIES ~ EVTYPE, data = StormData, FUN = sum)
 grppropdmg <- aggregate(PROPDMGVAL ~ EVTYPE, data = StormData, FUN = sum)
