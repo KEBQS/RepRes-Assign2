@@ -1,0 +1,232 @@
+---
+title: "Storm Data Project"
+course: "Reproducible Research - Assignment 2"
+data: National Oceanic and Atmospheric Administration (NOAA)
+author: "KB"
+date: "Thursday, November 19, 2015"
+output: html_document
+---
+
+#Reproducible Research - Assessment 2
+
+#Title : Analysis of NOAA Storm Database
+
+##Synopsis
+
+This analysis consist of exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database,
+which tracks characteristics of major storms and weather events in the United States, including when and where they
+occur, as well as estimates of any fatalities, injuries, and property damage.
+Storms and other severe weather events can cause both public health and economic problems for communities and 
+municipalities. Many severe events can result in fatalities, injuries, and property damage, and preventing such
+outcomes to the extent possible is a key concern.
+The events in the database start in the year 1950 and end in November 2011. In the earlier years of the database there are generally fewer events recorded, most likely due to a lack of good records. More recent years should be considered more complete.
+This analysis tries to answer the following questions.
+
+1. Across the United States, which types of events are most harmful with respect to population health?
+2. Across the United States, which types of events have the greatest economic consequences?
+
+##Data Processing
+
+There is also some documentation of the database available. Here you will find how some of the variables are constructed/defined.
+- National Weather Service [Storm Data Documentation](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf)
+- National Climatic Data Center Storm Events [FAQ](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2FNCDC%20Storm%20Events-FAQ%20Page.pdf)
+
+### Loading and Reading Data
+
+The data for this assignment come in the form of a comma-separated-value file compressed via the bzip2 algorithm to reduce its size. You can download the file from this link:
+- [Storm Data (47Mb)](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2)
+
+```{r}
+library(dplyr)
+library(ggplot2)
+if(!file.exists("./repdata-data-StormData.csv.bz2")){
+    temp<-tempfile()
+    download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2",
+                temp)
+    remove(temp)
+    }
+Storm_data <- read.csv(bzfile("repdata-data-StormData.csv.bz2"))
+```
+
+### Exploraing the Data
+
+Data consists of 902,207 rows and 37 columns collected during 62 years
+
+```{r, echo=TRUE}
+dim(Storm_data)
+summary(Storm_data)
+str(Storm_data)
+head(Storm_data)
+#Subsetting the data to show only those columns we wneed to work on
+onlyColumns <- c("BGN_DATE","COUNTY","COUNTYNAME","STATE","EVTYPE","LENGTH","WIDTH","FATALITIES","INJURIES","PROPDMG", "PROPDMGEXP","CROPDMG","CROPDMGEXP")
+StormData <- Storm_data[, onlyColumns]
+StormData$YEAR <- as.numeric(format(as.Date(Storm_data$BGN_DATE, format = "%m/%d/%Y %H:%M:%S"), "%Y"))
+unique(StormData$YEAR)
+TotStormsPerYear <- split(as.numeric(Storm_data$fatalities), Storm_data$year)
+#missingvalues<-sum(is.na(Storm_data))
+```
+
+###Estimating Property damage by dollar amount
+
+Property damage estimates should be entered as actual dollar amounts. To prepare the data, we need to assign a dollar amount value according with the magnitude of the damage.
+
+```{r}
+#exploring Property damage data
+unique(StormData$PROPDMGEXP)
+# Sorting the property exponent data
+StormData$PROPEXP[StormData$PROPDMGEXP == "K"] <- 1000
+StormData$PROPEXP[StormData$PROPDMGEXP == "M"] <- 1e+06
+StormData$PROPEXP[StormData$PROPDMGEXP == ""] <- 1
+StormData$PROPEXP[StormData$PROPDMGEXP == "B"] <- 1e+09
+StormData$PROPEXP[StormData$PROPDMGEXP == "m"] <- 1e+06
+StormData$PROPEXP[StormData$PROPDMGEXP == "0"] <- 1
+StormData$PROPEXP[StormData$PROPDMGEXP == "5"] <- 1e+05
+StormData$PROPEXP[StormData$PROPDMGEXP == "6"] <- 1e+06
+StormData$PROPEXP[StormData$PROPDMGEXP == "4"] <- 10000
+StormData$PROPEXP[StormData$PROPDMGEXP == "2"] <- 100
+StormData$PROPEXP[StormData$PROPDMGEXP == "3"] <- 1000
+StormData$PROPEXP[StormData$PROPDMGEXP == "h"] <- 100
+StormData$PROPEXP[StormData$PROPDMGEXP == "7"] <- 1e+07
+StormData$PROPEXP[StormData$PROPDMGEXP == "H"] <- 100
+StormData$PROPEXP[StormData$PROPDMGEXP == "1"] <- 10
+StormData$PROPEXP[StormData$PROPDMGEXP == "8"] <- 1e+08
+# Assigning 0 to invalid exponent data
+StormData$PROPEXP[StormData$PROPDMGEXP == "+"] <- 0
+StormData$PROPEXP[StormData$PROPDMGEXP == "-"] <- 0
+StormData$PROPEXP[StormData$PROPDMGEXP == "?"] <- 0
+# Calculating Property damage value in dollar amount
+StormData$PROPDMGVAL <- StormData$PROPDMG * StormData$PROPEXP
+```
+
+###Estimating Crop damage by dollar amount
+
+Estimating Crop damage by dollar amount. To prepare the data, we need to assign a dollar amount value according with the magnitude of the damage.
+
+```{r}
+#exploring Crop damage data
+unique(StormData$CROPDMGEXP)
+# Sorting the property exponent data
+StormData$CROPEXP[StormData$CROPDMGEXP == "M"] <- 1e+06
+StormData$CROPEXP[StormData$CROPDMGEXP == "K"] <- 1000
+StormData$CROPEXP[StormData$CROPDMGEXP == "m"] <- 1e+06
+StormData$CROPEXP[StormData$CROPDMGEXP == "B"] <- 1e+09
+StormData$CROPEXP[StormData$CROPDMGEXP == "0"] <- 1
+StormData$CROPEXP[StormData$CROPDMGEXP == "k"] <- 1000
+StormData$CROPEXP[StormData$CROPDMGEXP == "2"] <- 100
+StormData$CROPEXP[StormData$CROPDMGEXP == ""] <- 1
+# give 0 to invalid exponent data, so they not count in
+StormData$CROPEXP[StormData$CROPDMGEXP == "?"] <- 0
+# compute the crop damage value
+StormData$CROPDMGVAL <- StormData$CROPDMG * StormData$CROPEXP
+```
+
+###Grouping the data by event type
+
+There is 985 types of events.
+
+```{r}
+# aggregate the data by event
+unique(StormData$EVTYPE)
+grpfatal <- aggregate(FATALITIES ~ EVTYPE, data = StormData, FUN = sum)
+grpinjury <- aggregate(INJURIES ~ EVTYPE, data = StormData, FUN = sum)
+grppropdmg <- aggregate(PROPDMGVAL ~ EVTYPE, data = StormData, FUN = sum)
+grpcropdmg <- aggregate(CROPDMGVAL ~ EVTYPE, data = StormData, FUN = sum)
+
+```
+
+##Results
+
+###1. Across the United States, which types of events are most harmful with respect to population health?
+
+Displaying only the first 10 event types most harmful events from the 985 event types in total.
+
+```{r}
+# get top10 event with highest fatalities
+grpfatal10 <- grpfatal[order(-grpfatal$FATALITIES), ][1:10, ]
+# get top10 event with highest injuries
+grpinjury10 <- grpinjury[order(-grpinjury$INJURIES), ][1:10, ]
+par(mfrow = c(1, 2), mar = c(12, 4, 3, 2), mgp = c(3, 1, 0), cex = 0.8)
+par(las=3) # make label text perpendicular to axis
+barplot(grpfatal10$FATALITIES, names.arg = grpfatal10$EVTYPE, 
+    main = "Weather Events With the Top 10 Highest Fatalities", 
+    ylab = "Number of fatalities", 
+    col = c("red4","red","tomato3","tomato","orangered3","orangered2","orangered","orange","yellow","yellow3"),
+    legend = grpfatal10$FATALITIES,
+    args.legend = list(title = "NUMBERS", x = "topright", cex = .7))
+
+par(las=3) # make label text perpendicular to axis
+barplot(grpinjury10$INJURIES, las = 3, names.arg = grpinjury10$EVTYPE, 
+    main = "Weather Events with the Top 10 Highest Injuries", 
+    ylab = "Number of injuries", 
+    col = c("navy","blue4","blue2","dodgerblue4","cornflowerblue","lightblue4","lightslateblue","deepskyblue","lightblue","lightblue1"),
+    legend = grpinjury10$INJURIES,
+    args.legend = list(title = "NUMBERS", x = "topright", cex = .7))
+#text(x= bplt2, y=grpinjury10$INJURIES, labels=as.character(grpinjury10$INJURIES), xpd=TRUE, col="white")
+```
+    
+According with the graphic above, the Tornado is the most harmful Weather event that causes the highest fatalities (5633) and injuries (91,346).
+
+###2. Across the United States, which types of events have the greatest economic consequences?
+
+Displaying only the first 10 event types most harmful events from the 985 event types in total.
+
+```{r}
+grppropdmg10 <- grppropdmg[order(-grppropdmg$PROPDMGVAL), ][1:10, ]
+# get top 10 events with highest crop damage
+grpcropdmg10 <- grpcropdmg[order(-grpcropdmg$CROPDMGVAL), ][1:10, ]
+par(mfrow = c(1, 2), mar = c(12, 4, 3, 2), mgp = c(3, 1, 0), cex = 0.8)
+barplot(grppropdmg10$PROPDMGVAL/(10^9), las = 3, names.arg = grppropdmg10$EVTYPE, 
+    main = "Top 10 Events with the highest Property Damages", ylab = "Damage Cost (in $ billions)", 
+    col = c("maroon4","mediumvioletred","purple4","purple3","orchid4","plum4","plum3","plum2","mistyrose","moccasin"),
+    legend = grppropdmg10$PROPDMGVAL/(10^9),
+    args.legend = list(title = "NUMBERS", x = "topright", cex = .7))
+barplot(grpcropdmg10$CROPDMGVAL/(10^9), las = 3, names.arg = grpcropdmg10$EVTYPE, 
+    main = "Top 10 Events With the highest Crop Damages", ylab = "Damage Cost (in $ billions)", 
+    col = c("darkgreen","darkolivegreen","forestgreen","darkolivegreen4","green4","limegreen","mediumseagreen","mediumspringgreen","olivedrab3","olivedrab1"),
+    legend = grpcropdmg10$CROPDMGVAL/(10^9),
+    args.legend = list(title = "NUMBERS", x = "topright", cex = .7))
+```
+
+Flood has been the Weather event causing the major number of fatalities, meanwhile Drought caused the major number of injuries.
+
+Displaying tornado numbers during the years
+
+```{r}
+#Just Tornado data
+TornadoDF <- StormData[StormData$EVTYPE == "TORNADO",]
+TorFatalPerYear <- aggregate(FATALITIES ~ YEAR, data = TornadoDF, FUN = sum)
+grpFatalxYear5 <- TorFatalPerYear[order(-TorFatalPerYear$YEAR), ][1:5, ]
+grpFatalxYear5 <- grpFatalxYear5[order(grpFatalxYear5$YEAR),]
+
+TorInjurPerYear <- aggregate(INJURIES ~ YEAR, data = TornadoDF, FUN = sum)
+grpInjurxYear5 <- TorInjurPerYear[order(-TorInjurPerYear$YEAR), ][1:5, ]
+grpInjurxYear5 <- grpInjurxYear5[order(grpInjurxYear5$YEAR),]
+
+grppropyear <- aggregate(PROPDMGVAL ~ YEAR, data = TornadoDF, FUN = sum)
+grpcropyear <- aggregate(CROPDMGVAL ~ YEAR, data = TornadoDF, FUN = sum)
+grppropyear5 <- grppropyear[order(-grppropyear$PROPDMGVAL), ][1:5, ]
+grppropyear5 <- grppropyear5[order(grppropyear5$YEAR),]
+grpcropyear5 <- grpcropyear[order(-grpcropyear$CROPDMGVAL), ][1:5, ]
+grpcropyear5 <- grpcropyear5[order(grpcropyear5$YEAR),]
+
+par(mfrow = c(2, 2), mar = c(12, 4, 3, 2), mgp = c(3, 1, 0), cex = 0.8)
+#Tornado plots
+barplot(grpFatalxYear5$FATALITIES, las = 3, names.arg = grpFatalxYear5$YEAR, 
+    main = "Tornado fatalities per Year", ylab = "Number of fatalities", 
+    col = c("red"),
+    legend = grpFatalxYear5$FATALITIES,
+    args.legend = list(title = "NUMBERS", x = "topleft", cex = .7))
+barplot(grpInjurxYear5$INJURIES, las = 3, names.arg = grpInjurxYear5$YEAR, 
+    main = "Tornado injuries per Year", ylab = "Number of injuries", 
+    col = c("blue"),
+    legend = grpInjurxYear5$INJURIES,
+    args.legend = list(title = "NUMBERS", x = "topleft", cex = .7))
+#dollar
+barplot(grppropyear5$PROPDMGVAL/(10^9), las = 3, names.arg = grppropyear5$YEAR, 
+    main = "Tornado Property damages", ylab = "Damage Cost (in $ billions)", 
+    col = c("maroon4","mediumvioletred","purple4","purple3","orchid4"))
+barplot(grpcropyear5$CROPDMGVAL/(10^9), las = 3, names.arg = grpcropyear5$YEAR, 
+    main = "Tornado Crop Damages", ylab = "Damage Cost (in $ billions)", 
+    col = c("darkgreen","darkolivegreen","forestgreen","darkolivegreen4","green4"))
+
+```
